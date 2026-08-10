@@ -1,0 +1,20 @@
+# npm workspaces hoist shared deps to the root node_modules; apps/web has
+# its own .gitignore for its app-local concerns.
+/node_modules
+
+# Python (apps/quant-api)
+apps/quant-api/.venv/
+apps/quant-api/__pycache__/
+apps/quant-api/**/__pycache__/
+apps/quant-api/.pytest_cache/
+apps/quant-api/*.egg-info/
+
+# Env files (commit .env.example, never the real ones)
+.env
+.env.local
+.env.*.local
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
