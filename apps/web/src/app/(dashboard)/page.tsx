@@ -5,6 +5,7 @@ import { getNewsProvider } from "@/lib/news/providers";
 import { getMacroProvider } from "@/lib/macro/providers";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import Link from "next/link";
+import type { Quote } from "@financeapp/shared-types";
 
 // Without this, Next prerenders the page once at build time and freezes
 // the quotes/news/macro data — force dynamic rendering on every request.
@@ -18,7 +19,9 @@ export default async function OverviewPage() {
   const macro = getMacroProvider();
 
   const [quotes, latestNews, indicators] = await Promise.all([
-    Promise.all(WATCHLIST.map((symbol) => marketData.getQuote(symbol))),
+    Promise.all(
+      WATCHLIST.map((symbol) => marketData.getQuote(symbol).catch(() => null)),
+    ).then((results) => results.filter((q): q is Quote => q !== null)),
     news.getLatest(4),
     macro.getIndicators("United States"),
   ]);
@@ -28,8 +31,7 @@ export default async function OverviewPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
         <p className="text-sm text-muted-foreground">
-          Sample dashboard running on mock market data. Configure a real provider via
-          MARKET_DATA_PROVIDER.
+          Live data where available, with an automatic fallback to sample data.
         </p>
       </div>
 

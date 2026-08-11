@@ -6,13 +6,13 @@ import { authEnabled } from "@/lib/auth";
 import { MobileNav } from "./mobile-nav";
 import { SymbolSearch } from "./symbol-search";
 
-export function Topbar() {
+export function Topbar({ dataModeLabel }: { dataModeLabel: string }) {
   return (
     <header className="flex h-14 items-center gap-2 border-b border-border bg-card px-3 sm:gap-4 sm:px-4">
       <MobileNav />
       <SymbolSearch />
       <div className="ml-auto flex items-center gap-3 text-sm text-muted-foreground">
-        <span className="hidden sm:inline">Mock data mode</span>
+        <span className="hidden sm:inline">{dataModeLabel}</span>
         {authEnabled ? (
           <UserButton afterSignOutUrl="/sign-in" />
         ) : (

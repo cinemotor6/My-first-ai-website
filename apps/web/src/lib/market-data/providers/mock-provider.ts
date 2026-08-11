@@ -91,6 +91,78 @@ const MOCK_COMPANIES: MockCompany[] = [
   },
 ];
 
+/** Major global indices, keyed by their Yahoo Finance ticker convention (^GSPC etc.). */
+const MOCK_INDICES: MockCompany[] = [
+  {
+    symbol: "^GSPC",
+    name: "S&P 500",
+    exchange: "SNP",
+    country: "United States",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "USD",
+    description: "Tracks 500 large-cap US companies.",
+    basePrice: 5900,
+  },
+  {
+    symbol: "^DJI",
+    name: "Dow Jones Industrial Average",
+    exchange: "DJI",
+    country: "United States",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "USD",
+    description: "Tracks 30 large publicly-owned US companies.",
+    basePrice: 43000,
+  },
+  {
+    symbol: "^IXIC",
+    name: "Nasdaq Composite",
+    exchange: "NASDAQ",
+    country: "United States",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "USD",
+    description: "Tracks nearly all stocks listed on the Nasdaq exchange.",
+    basePrice: 19000,
+  },
+  {
+    symbol: "^FTSE",
+    name: "FTSE 100",
+    exchange: "FTSE",
+    country: "United Kingdom",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "GBP",
+    description: "Tracks the 100 largest companies listed on the London Stock Exchange.",
+    basePrice: 8200,
+  },
+  {
+    symbol: "^N225",
+    name: "Nikkei 225",
+    exchange: "OSA",
+    country: "Japan",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "JPY",
+    description: "Tracks 225 large companies listed on the Tokyo Stock Exchange.",
+    basePrice: 39000,
+  },
+  {
+    symbol: "^GDAXI",
+    name: "DAX",
+    exchange: "GER",
+    country: "Germany",
+    sector: "Index",
+    industry: "Broad Market Index",
+    currency: "EUR",
+    description: "Tracks the 40 largest companies listed on the Frankfurt Stock Exchange.",
+    basePrice: 19000,
+  },
+];
+
+const ALL_MOCK_SYMBOLS = [...MOCK_COMPANIES, ...MOCK_INDICES];
+
 /** Deterministic pseudo-randomness keyed by symbol + day, so mock data is stable across requests within a day. */
 function seededRandom(seed: string): number {
   let hash = 0;
@@ -102,7 +174,7 @@ function seededRandom(seed: string): number {
 }
 
 function findCompany(symbol: string): MockCompany {
-  const company = MOCK_COMPANIES.find(
+  const company = ALL_MOCK_SYMBOLS.find(
     (c) => c.symbol.toUpperCase() === symbol.toUpperCase(),
   );
   if (!company) throw new SymbolNotFoundError(symbol);
@@ -146,7 +218,7 @@ export class MockMarketDataProvider implements MarketDataProvider {
   async searchSymbols(query: string): Promise<CompanyProfile[]> {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return MOCK_COMPANIES.filter(
+    return ALL_MOCK_SYMBOLS.filter(
       (c) =>
         c.symbol.toLowerCase().includes(q) || c.name.toLowerCase().includes(q),
     ).map(toProfile);

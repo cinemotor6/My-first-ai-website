@@ -62,7 +62,8 @@ export default async function PortfolioPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Portfolio</h1>
         <p className="text-sm text-muted-foreground">
-          Sample holdings for user &quot;{userId}&quot;, priced with mock market data.
+          Sample holdings for user &quot;{userId}&quot;, priced with live market data
+          where available.
         </p>
       </div>
 

@@ -14,9 +14,10 @@ Two services, kept deliberately separate:
 └──────────┬───────────────┘        └────────────────────────────┘
            │
            ▼
-  Market data / news / macro
-  providers (mock today,
-  replaceable adapters)
+  Market data / news / FX providers:
+  live (Yahoo Finance / Frankfurter,
+  both keyless) with automatic mock
+  fallback. Macro is mock-only.
 ```
 
 **Why two services?** The UI and the request/response plumbing (auth,
@@ -48,7 +49,7 @@ the Next.js route returns a clear error if the quant service is unreachable
 (502) instead of a generic crash, and the UI surfaces the message instead of
 hanging.
 
-## The adapter pattern (market data, news, macro)
+## The adapter pattern (market data, news, macro, FX)
 
 Every external data source is accessed through an interface, never
 directly:
@@ -57,24 +58,56 @@ directly:
 src/lib/market-data/
   types.ts                 MarketDataProvider interface
   providers/
-    mock-provider.ts       MockMarketDataProvider (sample global tickers)
+    mock-provider.ts       MockMarketDataProvider (sample global tickers + indices)
+    yahoo/                 YahooFinanceMarketDataProvider (live, keyless)
+    fallback-provider.ts   FallbackMarketDataProvider — tries live, falls back to mock
     index.ts                getMarketDataProvider() factory, reads MARKET_DATA_PROVIDER
 ```
 
-`src/lib/news/` and `src/lib/macro/` follow the identical shape
-(`NewsProvider` / `MacroProvider`). Pages and API routes only ever import
-`getMarketDataProvider()` etc. — never `MockMarketDataProvider` directly.
+`src/lib/news/` and `src/lib/fx/` follow the identical shape
+(`NewsProvider` / `FxRateProvider`, each with a live provider + a
+`FallbackXProvider` wrapper). `src/lib/macro/` has only a mock provider
+today — no free/keyless macro API was wired in this pass. Pages and API
+routes only ever import `getMarketDataProvider()` etc. — never a concrete
+provider class directly.
 
-**To add a real provider later** (e.g. Finnhub, Twelve Data, Polygon.io for
-market data; FRED/World Bank for macro): implement the interface in a new
-file under `providers/`, register it in that folder's `index.ts`, and set
-the corresponding env var (`MARKET_DATA_PROVIDER=finnhub`, etc.). Nothing
-else in the app changes — pages, API routes, and components depend on the
-interface, not the implementation.
+### Live data, no API key: Yahoo Finance + Frankfurter
 
-Today only the `mock` provider exists for each, so the app runs with zero
-API keys and zero cost. The mock data is clearly labeled as such in the UI
-("Mock data mode").
+- **Market data & news** (`lib/market-data/providers/yahoo/`,
+  `lib/news/providers/yahoo-provider.ts`): Yahoo Finance's public
+  `query1/query2.finance.yahoo.com` chart/quoteSummary/search endpoints —
+  the same undocumented, keyless API the `yfinance` Python library scrapes.
+  No signup, no key, no cost. It's also unofficial: Yahoo can change the
+  response shape or start rate-limiting without notice, which is exactly
+  why it's never called directly (see fallback section below).
+- **FX rates** (`lib/fx/providers/frankfurter/`): [Frankfurter](https://frankfurter.dev),
+  a free, keyless, open-source API backed by European Central Bank
+  reference rates.
+
+Response parsing for both is factored into pure functions
+(`yahoo/parse.ts`, `frankfurter/parse.ts`) unit-tested against fixture JSON
+matching each API's real shape (`npm run test` in `apps/web`) — the network
+call itself isn't mocked, the *parsing/mapping logic* is what's tested,
+independent of network access.
+
+### The fallback layer
+
+`FallbackMarketDataProvider`, `FallbackNewsProvider`, and
+`FallbackFxRateProvider` each wrap a primary (live) and a fallback (mock)
+provider behind the shared `withFallback()` helper
+(`lib/provider-fallback.ts`): try the primary, and on *any* failure —
+network error, timeout, non-2xx response, unexpected payload shape, rate
+limit — log a warning and transparently return the fallback's result
+instead. This is per-method, not all-or-nothing: `getQuote` can succeed
+live while `searchSymbols` falls back, independently, on the same request.
+This is the default (`MARKET_DATA_PROVIDER=live`, etc.) — the app always
+tries for real data first and only shows sample data when it genuinely
+can't reach the live source, with no visible error to the user either way.
+
+**To add another real provider**: implement the interface in a new file
+under `providers/`, register it in that folder's `index.ts`, and set the
+corresponding env var. Nothing else in the app changes — pages, API
+routes, and components depend on the interface, not the implementation.
 
 ## Portfolio storage
 
@@ -170,10 +203,11 @@ end-to-end browser testing, not just theoretical:
 
 Portfolio holdings can be in different currencies (the seed data mixes USD
 and EUR). Summing raw numbers across currencies would be meaningless, so
-`lib/fx/` follows the same adapter pattern as the other data sources
-(`FxRateProvider` interface, `MockFxRateProvider` with static illustrative
-USD cross-rates) and the portfolio page converts every holding to USD
-before totaling. Per-row values still show in their native currency.
+`lib/fx/` follows the same adapter pattern as the other data sources and
+the portfolio page converts every holding to USD before totaling (live
+rate via Frankfurter, falling back to static illustrative cross-rates in
+`MockFxRateProvider` if unreachable). Per-row values still show in their
+native currency.
 
 ## Mobile navigation
 
@@ -193,17 +227,18 @@ correct anyway.
 
 | Feature | Status |
 |---|---|
-| Global market quotes, search, historical prices | Mock provider, adapter-ready for a real one |
-| Company financials (income statement, balance sheet, cash flow) | Mock provider |
+| Global market quotes, historical prices, symbol search | **Live** via Yahoo Finance, falls back to mock automatically |
+| Market indices (S&P 500, Dow, Nasdaq, FTSE 100, Nikkei 225, DAX) | **Live**, same path as above — see Markets page |
+| Company profile & financial statements | **Live** via Yahoo Finance quoteSummary, falls back to mock |
+| News (general + per-symbol) | **Live** via Yahoo Finance search endpoint, falls back to mock |
+| FX rates (portfolio currency conversion) | **Live** via Frankfurter/ECB, falls back to static mock rates |
 | Charts | Dependency-free SVG line chart + histogram (`components/charts/`) |
 | DCF calculator | **Fully implemented** — simple single-stage model, real computation in Python |
 | Monte Carlo valuation | **Fully implemented** — see above |
 | Scenario analysis | **Fully implemented** — see above |
 | Portfolio tracking | **Fully implemented** — add/remove holdings, USD-converted total; storage is an in-memory mock repository (not persisted across restarts) |
-| Symbol search | **Fully implemented** — debounced autocomplete against the market-data adapter |
 | Mobile navigation | **Fully implemented** — drawer + hamburger below `md` |
-| News | Mock provider, 4 sample articles |
-| Macro indicators | Mock provider, sample US/EU/Japan/China indicators |
+| Macro indicators | Mock provider only — no free/keyless macro API wired in yet |
 | Auth | Clerk, conditional on env vars (see above) |
 | Database | **Not wired up.** No Postgres, no ORM yet — the `PortfolioRepository` interface exists so this is a swap-in, not a rewrite |
 
@@ -217,17 +252,26 @@ correct anyway.
   Fine for a static line/histogram; swap for TradingView Lightweight Charts
   (or similar) when interactivity (zoom, crosshair, multiple series) is
   needed.
-- FX rates are static illustrative constants, not live rates.
+- The Yahoo Finance and Frankfurter integrations are unofficial/free-tier
+  data sources meant for a demo/personal-project scale — not a substitute
+  for a licensed real-time data vendor if you're building something that
+  needs guaranteed uptime, SLAs, or redistribution rights.
+- Yahoo Finance's `marketCap` field isn't fetched in `getQuote` (it lives
+  in a separate quoteSummary module, and skipping it keeps quotes to one
+  request) — the field is optional on `Quote` for exactly this reason.
 
 ## Suggested next steps
 
-1. Wire a real market-data provider (Finnhub free tier is a reasonable
-   starting point) behind the existing adapter — search, quotes, and
-   historicals all get it automatically.
-2. Add a Postgres-backed `PortfolioRepository` implementation (e.g. via
+1. Add a Postgres-backed `PortfolioRepository` implementation (e.g. via
    Prisma) once you're ready to persist real user data across restarts and
    serverless cold starts (the current in-memory + `globalThis` approach
    only survives within one running process).
-3. Swap the SVG charts for an interactive charting library once real
-   historical data is flowing.
-4. Wire a real FX rate provider behind `lib/fx/`.
+2. Swap the SVG charts for an interactive charting library once you want
+   zoom/crosshair/multi-series on real historical data.
+3. Wire a free/keyless macro provider (FRED requires a key; World Bank's
+   API is keyless and could slot into `lib/macro/` the same way) if macro
+   indicators should be live too.
+4. If you outgrow Yahoo Finance's unofficial API (rate limits, reliability
+   for production traffic), swap in a licensed provider (Finnhub, Twelve
+   Data, Polygon.io, ...) behind the same `MarketDataProvider` interface —
+   the fallback wrapper pattern still applies unchanged.

@@ -53,26 +53,31 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000. The dashboard runs entirely on mock data by
-default — no API keys, no signups needed.
+Open http://localhost:3000. By default the app tries **live data first**
+(Yahoo Finance for quotes/financials/news, Frankfurter for FX) and falls
+back to mock/sample data automatically if a live call fails — no API keys
+or signups needed either way. If your network blocks those domains (some
+corporate networks, sandboxes, CI), the app still works correctly: every
+page just renders on the mock fallback instead, transparently.
 
 ### Environment variables (`apps/web/.env.local`)
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `MARKET_DATA_PROVIDER` | `mock` | Which market-data adapter to use. Only `mock` exists today. |
-| `NEWS_PROVIDER` | `mock` | Same idea, for news. |
-| `MACRO_PROVIDER` | `mock` | Same idea, for macro indicators. |
-| `FX_RATE_PROVIDER` | `mock` | Same idea, for currency conversion (used to total a multi-currency portfolio). |
+| `MARKET_DATA_PROVIDER` | `live` | `mock` (never touches network), `yahoo` (live only, no fallback), or `live` (live with mock fallback — default). |
+| `NEWS_PROVIDER` | `live` | Same three options, for news. |
+| `MACRO_PROVIDER` | `mock` | Only `mock` exists today — no free/keyless macro API is wired in yet. |
+| `FX_RATE_PROVIDER` | `live` | `mock`, `frankfurter` (live only), or `live` (live with mock fallback — default). Used to total a multi-currency portfolio. |
 | `QUANT_API_URL` | `http://localhost:8000` | Where the Next.js API routes reach the Python service. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | unset | Optional. Set together with `CLERK_SECRET_KEY` to enable real sign-in via Clerk. Leave both unset to run unauthenticated with a fixed demo user. |
 | `CLERK_SECRET_KEY` | unset | See above. Get both from https://dashboard.clerk.com. |
 
-## Build & lint (web)
+## Build, lint & test (web)
 
 ```bash
 cd apps/web
 npm run lint
+npm run test    # vitest — unit tests for provider parsing/fallback logic
 npm run build
 ```
 
@@ -90,10 +95,11 @@ apps/web/src/
   components/layout/  Sidebar, Topbar, mobile nav drawer, symbol search
   components/charts/  Dependency-free SVG line chart + histogram
   components/valuation/ Shared DCF input field grid (used by DCF/Monte Carlo/Scenario forms)
-  lib/market-data/    MarketDataProvider interface + mock adapter
-  lib/news/           NewsProvider interface + mock adapter
-  lib/macro/          MacroProvider interface + mock adapter
-  lib/fx/             FxRateProvider interface + mock adapter (currency conversion)
+  lib/market-data/    MarketDataProvider interface; mock, Yahoo Finance (live), and fallback-wrapped adapters
+  lib/news/           NewsProvider interface; mock, Yahoo Finance (live), and fallback-wrapped adapters
+  lib/macro/          MacroProvider interface + mock adapter (no live source wired in yet)
+  lib/fx/             FxRateProvider interface; mock, Frankfurter (live), and fallback-wrapped adapters
+  lib/provider-fallback.ts  Shared "try live, log + fall back to mock" helper
   lib/portfolio/      PortfolioRepository interface + in-memory mock repo (globalThis-cached)
   lib/valuation/      Zod schemas + shared quant-API proxy helper
 

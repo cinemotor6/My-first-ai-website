@@ -11,9 +11,6 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         <NavLinks />
       </nav>
-      <div className="border-t border-border p-3 text-xs text-muted-foreground">
-        Data shown is sample/mock data.
-      </div>
     </aside>
   );
 }
