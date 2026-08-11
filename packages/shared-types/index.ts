@@ -70,6 +70,13 @@ export interface PortfolioHolding {
   currency: Currency;
 }
 
+// ---- Watchlist -----------------------------------------------------------
+
+export interface WatchlistItem {
+  id: string;
+  symbol: string;
+}
+
 // ---- News & macro --------------------------------------------------------
 
 export interface NewsArticle {

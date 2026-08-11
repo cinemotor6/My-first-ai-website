@@ -18,8 +18,9 @@ Two services, kept deliberately separate:
   providers: live (Yahoo Finance /
   Frankfurter / World Bank, all
   keyless) with automatic mock
-  fallback. Portfolio persists to a
-  local SQLite file.
+  fallback. Portfolio and watchlist
+  data persist to a local SQLite
+  file.
 ```
 
 **Why two services?** The UI and the request/response plumbing (auth,
@@ -158,6 +159,44 @@ in network-restricted environments. It's marked experimental by Node
 - Set `PORTFOLIO_STORAGE=mock` to force the old in-memory-only behavior
   explicitly (e.g. for a demo where persistence isn't wanted).
 
+## Watchlist storage
+
+`src/lib/watchlist/` is the same interface pattern applied to a second,
+independent kind of user data: symbols someone wants to track on the
+Markets and Overview pages, as distinct from portfolio holdings (no
+quantity/cost basis, just a symbol). It's a deliberate copy of the
+`PortfolioRepository` design, not a variant of it — same `WatchlistRepository`
+interface (`listItems`/`addItem`/`removeItem`), same `SqliteWatchlistRepository`
+default backed by the **same** SQLite file and connection as portfolio data
+(a second table, `watchlist_items`, added to the schema in
+`lib/db/sqlite.ts`), same `MockWatchlistRepository` in-memory fallback, same
+`globalThis`-cached singleton in `lib/watchlist/providers/index.ts`, and the
+same construction-time (not per-call) fallback reasoning: a watchlist add/remove
+is a write, so a silent per-call fallback to an empty in-memory store would
+look like data loss.
+
+- **Env var**: `WATCHLIST_STORAGE`, default `sqlite`; set to `mock` for the
+  old in-memory-only behavior. Independent of `PORTFOLIO_STORAGE` — you can
+  mix, though there's no real reason to.
+- **Duplicate symbols**: `addItem` is idempotent per user — adding a symbol
+  already on the list returns the existing item instead of creating a
+  second row (enforced with a `UNIQUE(user_id, symbol)` constraint at the
+  SQLite layer, and checked explicitly first so the behavior is identical
+  under `MockWatchlistRepository`).
+- **No seed data for the SQLite path**, matching the portfolio repository's
+  behavior: a fresh database starts with an empty watchlist per user, and
+  the UI (Markets page) shows "No symbols yet. Add one above." until
+  someone adds their first symbol. Only `MockWatchlistRepository` seeds
+  sample symbols, for demoing the UI without a database.
+- Wired into two pages: `markets/page.tsx` renders the watchlist with
+  add/remove controls (`add-symbol-form.tsx`, `remove-symbol-button.tsx`)
+  alongside the (untouched, always-on, non-editable) Indices section; the
+  Overview page's ticker cards read from the same repository so both pages
+  show one consistent, persisted list.
+- Same deployment caveat as portfolio storage applies (see above):
+  SQLite-on-local-disk doesn't persist on serverless/ephemeral-filesystem
+  deployments — swap in a Postgres-backed implementation there.
+
 ## Authentication
 
 Auth uses [Clerk](https://clerk.com), but is **conditional on environment
@@ -277,10 +316,11 @@ correct anyway.
 | Monte Carlo valuation | **Fully implemented** — see above |
 | Scenario analysis | **Fully implemented** — see above |
 | Portfolio tracking | **Fully implemented** — add/remove holdings, USD-converted total, **persisted to a local SQLite file** across restarts |
+| Watchlist | **Fully implemented** — add/remove tracked symbols on the Markets page, **persisted to the same local SQLite file**, shared with the Overview page |
 | Mobile navigation | **Fully implemented** — drawer + hamburger below `md` |
 | Macro indicators (GDP growth, CPI inflation) | **Live** via World Bank, falls back to mock automatically. Annual data with a reporting lag — see above |
 | Auth | Clerk, conditional on env vars (see above) |
-| Database | **Wired up** — SQLite via `node:sqlite`, zero external dependencies. Not a fit for serverless/ephemeral-filesystem deployments (see above); swap for Postgres there |
+| Database | **Wired up** — SQLite via `node:sqlite`, zero external dependencies, two tables (`holdings`, `watchlist_items`). Not a fit for serverless/ephemeral-filesystem deployments (see above); swap for Postgres there |
 
 ## Deliberate simplifications
 
@@ -322,10 +362,11 @@ confirming the real APIs still respond the way the parsers expect.
 
 ## Suggested next steps
 
-1. Add a Postgres-backed `PortfolioRepository` implementation once you're
-   ready to deploy somewhere with an ephemeral/read-only filesystem
-   (serverless) or need multi-instance scaling — the interface is already
-   correct, so this is a swap-in, not a rewrite.
+1. Add Postgres-backed `PortfolioRepository` and `WatchlistRepository`
+   implementations once you're ready to deploy somewhere with an
+   ephemeral/read-only filesystem (serverless) or need multi-instance
+   scaling — both interfaces are already correct, so this is a swap-in,
+   not a rewrite.
 2. Swap the SVG charts for an interactive charting library once you want
    zoom/crosshair/multi-series on real historical data.
 3. If you outgrow Yahoo Finance's unofficial API (rate limits, reliability
