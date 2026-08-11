@@ -10,10 +10,10 @@ macro indicators try **live, free, keyless sources first** (Yahoo Finance,
 Frankfurter/ECB, World Bank) and automatically fall back to realistic mock
 data if a live call fails for any reason (network down, rate limited,
 offline). Every data source sits behind a swappable adapter interface —
-see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Portfolio holdings can
-be added and removed through the UI, **persisted to a local SQLite file**
-(via Node's built-in `node:sqlite` — no external database service, no ORM,
-no signup). DCF, Monte Carlo, and scenario analysis all run real
+see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Portfolio holdings and
+watchlist symbols can be added and removed through the UI, **persisted to
+a local SQLite file** (via Node's built-in `node:sqlite` — no external
+database service, no ORM, no signup). DCF, Monte Carlo, and scenario analysis all run real
 calculations in the Python quant service; the DCF model itself is
 intentionally a simple single-stage model, not investment-grade.
 

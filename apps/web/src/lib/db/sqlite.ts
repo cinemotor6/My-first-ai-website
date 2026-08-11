@@ -24,6 +24,15 @@ const SCHEMA = `
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_holdings_user_id ON holdings(user_id);
+
+  CREATE TABLE IF NOT EXISTS watchlist_items (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, symbol)
+  );
+  CREATE INDEX IF NOT EXISTS idx_watchlist_items_user_id ON watchlist_items(user_id);
 `;
 
 export function createDatabase(dbPath: string): DatabaseSync {

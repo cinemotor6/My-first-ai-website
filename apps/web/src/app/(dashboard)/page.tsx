@@ -3,6 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { getMarketDataProvider } from "@/lib/market-data/providers";
 import { getNewsProvider } from "@/lib/news/providers";
 import { getMacroProvider } from "@/lib/macro/providers";
+import { getWatchlistRepository } from "@/lib/watchlist/providers";
+import { getCurrentUserId } from "@/lib/auth-server";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import Link from "next/link";
 import type { Quote } from "@financeapp/shared-types";
@@ -11,16 +13,18 @@ import type { Quote } from "@financeapp/shared-types";
 // the quotes/news/macro data — force dynamic rendering on every request.
 export const dynamic = "force-dynamic";
 
-const WATCHLIST = ["AAPL", "MSFT", "SAP.DE", "7203.T", "0700.HK", "NESN.SW"];
-
 export default async function OverviewPage() {
+  const userId = await getCurrentUserId();
   const marketData = getMarketDataProvider();
   const news = getNewsProvider();
   const macro = getMacroProvider();
+  const watchlist = getWatchlistRepository();
+
+  const watchlistSymbols = (await watchlist.listItems(userId)).map((item) => item.symbol);
 
   const [quotes, latestNews, indicators] = await Promise.all([
     Promise.all(
-      WATCHLIST.map((symbol) => marketData.getQuote(symbol).catch(() => null)),
+      watchlistSymbols.map((symbol) => marketData.getQuote(symbol).catch(() => null)),
     ).then((results) => results.filter((q): q is Quote => q !== null)),
     news.getLatest(4),
     macro.getIndicators("United States"),
