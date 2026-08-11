@@ -12,8 +12,13 @@ const addHoldingSchema = z.object({
 
 export async function GET() {
   const userId = await getCurrentUserId();
-  const holdings = await getPortfolioRepository().listHoldings(userId);
-  return NextResponse.json(holdings);
+  try {
+    const holdings = await getPortfolioRepository().listHoldings(userId);
+    return NextResponse.json(holdings);
+  } catch (err) {
+    console.error("[api/portfolio] Failed to list holdings:", err);
+    return NextResponse.json({ error: "Could not load portfolio holdings." }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -34,6 +39,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const holding = await getPortfolioRepository().addHolding(userId, parsed.data);
-  return NextResponse.json(holding, { status: 201 });
+  try {
+    const holding = await getPortfolioRepository().addHolding(userId, parsed.data);
+    return NextResponse.json(holding, { status: 201 });
+  } catch (err) {
+    console.error("[api/portfolio] Failed to add holding:", err);
+    return NextResponse.json({ error: "Could not add the holding." }, { status: 500 });
+  }
 }

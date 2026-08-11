@@ -4,5 +4,8 @@
   "workspaces": [
     "apps/web",
     "packages/*"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^22.20.1"
+  }
 }

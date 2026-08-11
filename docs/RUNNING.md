@@ -9,7 +9,9 @@ portfolio, search, news, macro) works with just the web app.
 
 ## Prerequisites
 
-- Node.js 20+ and npm
+- **Node.js 22.5+** and npm — required for `node:sqlite` (portfolio
+  storage; see [ARCHITECTURE.md](ARCHITECTURE.md#portfolio-storage)), not
+  just Next.js itself
 - Python 3.11+
 
 ## 1. Install JavaScript dependencies
@@ -54,11 +56,15 @@ npm run dev
 ```
 
 Open http://localhost:3000. By default the app tries **live data first**
-(Yahoo Finance for quotes/financials/news, Frankfurter for FX) and falls
-back to mock/sample data automatically if a live call fails — no API keys
-or signups needed either way. If your network blocks those domains (some
-corporate networks, sandboxes, CI), the app still works correctly: every
-page just renders on the mock fallback instead, transparently.
+(Yahoo Finance for quotes/financials/news, Frankfurter for FX, World Bank
+for macro) and falls back to mock/sample data automatically if a live call
+fails — no API keys or signups needed either way. If your network blocks
+those domains (some corporate networks, sandboxes, CI), the app still
+works correctly: every page just renders on the mock fallback instead,
+transparently.
+
+Portfolio holdings persist to a local SQLite file (`apps/web/.data/app.db`
+by default) — add a holding, restart `npm run dev`, and it's still there.
 
 ### Environment variables (`apps/web/.env.local`)
 
@@ -66,8 +72,10 @@ page just renders on the mock fallback instead, transparently.
 |---|---|---|
 | `MARKET_DATA_PROVIDER` | `live` | `mock` (never touches network), `yahoo` (live only, no fallback), or `live` (live with mock fallback — default). |
 | `NEWS_PROVIDER` | `live` | Same three options, for news. |
-| `MACRO_PROVIDER` | `mock` | Only `mock` exists today — no free/keyless macro API is wired in yet. |
+| `MACRO_PROVIDER` | `live` | `mock`, `worldbank` (live only, no fallback), or `live` (live with mock fallback — default). |
 | `FX_RATE_PROVIDER` | `live` | `mock`, `frankfurter` (live only), or `live` (live with mock fallback — default). Used to total a multi-currency portfolio. |
+| `PORTFOLIO_STORAGE` | `sqlite` | `sqlite` (persists to a local file, default) or `mock` (in-memory only, resets on restart). Falls back to `mock` automatically for the process if SQLite fails to initialize. |
+| `DATABASE_PATH` | `./.data/app.db` | Where the SQLite file lives (relative to the process's working directory). Created automatically. |
 | `QUANT_API_URL` | `http://localhost:8000` | Where the Next.js API routes reach the Python service. |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | unset | Optional. Set together with `CLERK_SECRET_KEY` to enable real sign-in via Clerk. Leave both unset to run unauthenticated with a fixed demo user. |
 | `CLERK_SECRET_KEY` | unset | See above. Get both from https://dashboard.clerk.com. |
@@ -77,7 +85,7 @@ page just renders on the mock fallback instead, transparently.
 ```bash
 cd apps/web
 npm run lint
-npm run test    # vitest — unit tests for provider parsing/fallback logic
+npm run test    # vitest — unit tests for provider parsing/fallback logic and SQLite storage
 npm run build
 ```
 
@@ -97,10 +105,11 @@ apps/web/src/
   components/valuation/ Shared DCF input field grid (used by DCF/Monte Carlo/Scenario forms)
   lib/market-data/    MarketDataProvider interface; mock, Yahoo Finance (live), and fallback-wrapped adapters
   lib/news/           NewsProvider interface; mock, Yahoo Finance (live), and fallback-wrapped adapters
-  lib/macro/          MacroProvider interface + mock adapter (no live source wired in yet)
+  lib/macro/          MacroProvider interface; mock, World Bank (live), and fallback-wrapped adapters
   lib/fx/             FxRateProvider interface; mock, Frankfurter (live), and fallback-wrapped adapters
   lib/provider-fallback.ts  Shared "try live, log + fall back to mock" helper
-  lib/portfolio/      PortfolioRepository interface + in-memory mock repo (globalThis-cached)
+  lib/db/sqlite.ts    node:sqlite connection + schema (globalThis-cached)
+  lib/portfolio/      PortfolioRepository interface; SQLite (default, persistent) + in-memory mock adapters
   lib/valuation/      Zod schemas + shared quant-API proxy helper
 
 apps/quant-api/app/

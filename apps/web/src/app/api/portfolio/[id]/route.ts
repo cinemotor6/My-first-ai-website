@@ -9,6 +9,11 @@ export async function DELETE(
   const { id } = await context.params;
   const userId = await getCurrentUserId();
 
-  await getPortfolioRepository().removeHolding(userId, id);
-  return new NextResponse(null, { status: 204 });
+  try {
+    await getPortfolioRepository().removeHolding(userId, id);
+    return new NextResponse(null, { status: 204 });
+  } catch (err) {
+    console.error("[api/portfolio/[id]] Failed to remove holding:", err);
+    return NextResponse.json({ error: "Could not remove the holding." }, { status: 500 });
+  }
 }

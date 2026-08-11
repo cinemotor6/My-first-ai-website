@@ -22,8 +22,10 @@ export default async function MacroPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Macroeconomic Indicators</h1>
         <p className="text-sm text-muted-foreground">
-          Sample indicators (mock provider). A real implementation would use FRED, World
-          Bank, or IMF APIs.
+          Live GDP growth and inflation via the World Bank&apos;s public API where
+          available, with sample fallback. World Bank data is annual and typically
+          1-2 years behind — expect the &quot;Period&quot; column to show a past year, not
+          the current month.
         </p>
       </div>
       <Card>

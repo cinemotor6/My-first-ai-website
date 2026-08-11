@@ -5,15 +5,15 @@ valuation tools (DCF, Monte Carlo, scenario analysis), portfolio tracking,
 news, and macroeconomic indicators.
 
 Every feature above is functional end-to-end — no paid APIs, no signups,
-no exposed API keys, ever. Market data, financials, news, and FX rates try
-**live, free, keyless sources first** (Yahoo Finance, Frankfurter/ECB) and
-automatically fall back to realistic mock data if a live call fails for
-any reason (network down, rate limited, offline). Macro indicators are
-mock-only for now. Every data source sits behind a swappable adapter
-interface — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Portfolio
-holdings can be added and removed through the UI, backed by an in-memory
-store (not persisted across restarts — a real database is the next step,
-not yet wired up). DCF, Monte Carlo, and scenario analysis all run real
+no exposed API keys, ever. Market data, financials, news, FX rates, and
+macro indicators try **live, free, keyless sources first** (Yahoo Finance,
+Frankfurter/ECB, World Bank) and automatically fall back to realistic mock
+data if a live call fails for any reason (network down, rate limited,
+offline). Every data source sits behind a swappable adapter interface —
+see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Portfolio holdings can
+be added and removed through the UI, **persisted to a local SQLite file**
+(via Node's built-in `node:sqlite` — no external database service, no ORM,
+no signup). DCF, Monte Carlo, and scenario analysis all run real
 calculations in the Python quant service; the DCF model itself is
 intentionally a simple single-stage model, not investment-grade.
 

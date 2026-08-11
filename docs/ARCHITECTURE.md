@@ -14,10 +14,12 @@ Two services, kept deliberately separate:
 └──────────┬───────────────┘        └────────────────────────────┘
            │
            ▼
-  Market data / news / FX providers:
-  live (Yahoo Finance / Frankfurter,
-  both keyless) with automatic mock
-  fallback. Macro is mock-only.
+  Market data / news / FX / macro
+  providers: live (Yahoo Finance /
+  Frankfurter / World Bank, all
+  keyless) with automatic mock
+  fallback. Portfolio persists to a
+  local SQLite file.
 ```
 
 **Why two services?** The UI and the request/response plumbing (auth,
@@ -64,14 +66,13 @@ src/lib/market-data/
     index.ts                getMarketDataProvider() factory, reads MARKET_DATA_PROVIDER
 ```
 
-`src/lib/news/` and `src/lib/fx/` follow the identical shape
-(`NewsProvider` / `FxRateProvider`, each with a live provider + a
-`FallbackXProvider` wrapper). `src/lib/macro/` has only a mock provider
-today — no free/keyless macro API was wired in this pass. Pages and API
+`src/lib/news/`, `src/lib/fx/`, and `src/lib/macro/` all follow the
+identical shape (`NewsProvider` / `FxRateProvider` / `MacroProvider`, each
+with a live provider + a `FallbackXProvider` wrapper). Pages and API
 routes only ever import `getMarketDataProvider()` etc. — never a concrete
 provider class directly.
 
-### Live data, no API key: Yahoo Finance + Frankfurter
+### Live data, no API key: Yahoo Finance, Frankfurter, World Bank
 
 - **Market data & news** (`lib/market-data/providers/yahoo/`,
   `lib/news/providers/yahoo-provider.ts`): Yahoo Finance's public
@@ -83,17 +84,28 @@ provider class directly.
 - **FX rates** (`lib/fx/providers/frankfurter/`): [Frankfurter](https://frankfurter.dev),
   a free, keyless, open-source API backed by European Central Bank
   reference rates.
+- **Macro indicators** (`lib/macro/providers/worldbank/`): the
+  [World Bank's public API](https://api.worldbank.org), free and keyless.
+  Scoped to GDP growth and CPI inflation for US/Euro area/Japan/China —
+  the indicators actually available on this source without a key. Data is
+  **annual with a reporting lag** (typically 1-2 years behind "today"),
+  unlike the mock provider's illustrative current-month figures — that's
+  an inherent property of this free source, not a bug. A single region can
+  partially fail (e.g. GDP succeeds, CPI doesn't) without losing the
+  region entirely — `WorldBankMacroProvider.getIndicators()` uses
+  `Promise.allSettled` internally and returns whatever succeeded, only
+  deferring to the mock fallback if *everything* failed.
 
-Response parsing for both is factored into pure functions
-(`yahoo/parse.ts`, `frankfurter/parse.ts`) unit-tested against fixture JSON
-matching each API's real shape (`npm run test` in `apps/web`) — the network
-call itself isn't mocked, the *parsing/mapping logic* is what's tested,
-independent of network access.
+Response parsing for all three is factored into pure functions
+(`yahoo/parse.ts`, `frankfurter/parse.ts`, `worldbank/parse.ts`) unit-tested
+against fixture JSON matching each API's real shape (`npm run test` in
+`apps/web`) — the network call itself isn't mocked, the *parsing/mapping
+logic* is what's tested, independent of network access.
 
 ### The fallback layer
 
-`FallbackMarketDataProvider`, `FallbackNewsProvider`, and
-`FallbackFxRateProvider` each wrap a primary (live) and a fallback (mock)
+`FallbackMarketDataProvider`, `FallbackNewsProvider`, `FallbackFxRateProvider`,
+and `FallbackMacroProvider` each wrap a primary (live) and a fallback (mock)
 provider behind the shared `withFallback()` helper
 (`lib/provider-fallback.ts`): try the primary, and on *any* failure —
 network error, timeout, non-2xx response, unexpected payload shape, rate
@@ -112,11 +124,39 @@ routes, and components depend on the interface, not the implementation.
 ## Portfolio storage
 
 `src/lib/portfolio/` follows the same interface pattern
-(`PortfolioRepository`), but the concrete implementation is
-`MockPortfolioRepository` — an in-memory store, reset on server restart, not
-a real database. It's a placeholder for a future Postgres-backed
-implementation (see "Not yet built" below); the interface is already
-correct so swapping the implementation won't touch calling code.
+(`PortfolioRepository`). The default implementation,
+`SqlitePortfolioRepository` (`lib/portfolio/providers/sqlite-repository.ts`),
+persists holdings to a local SQLite file via Node's **built-in**
+`node:sqlite` module — no external database service, no ORM, no signup, no
+paid tier, and critically no npm package or native-binary download either
+(unlike better-sqlite3 or Prisma's query-engine binaries), which matters
+in network-restricted environments. It's marked experimental by Node
+(stable-ish since Node 22.5, unflagged) and requires **Node 22+** — see
+`lib/db/sqlite.ts`.
+
+- **Where the file lives**: `DATABASE_PATH`, default `./.data/app.db`
+  (created automatically). `:memory:` is valid too (used by every unit
+  test — see `vitest.config.mts`'s `test.env`).
+- **Fallback behavior differs from the market-data providers on purpose.**
+  Market data is read-only display data, so falling back *per call* is
+  safe — a stale/mock quote next to a live one is harmless. Portfolio data
+  is mutable and user-owned: a write landing in SQLite while a later read
+  silently falls back to the (empty) in-memory store would look exactly
+  like data loss. So instead of a per-call `FallbackPortfolioRepository`,
+  the fallback happens **once, at construction time**
+  (`providers/index.ts::createRepository()`): if `SqlitePortfolioRepository`
+  can't even initialize (no write access to `DATABASE_PATH`, disk full),
+  the *whole process* uses `MockPortfolioRepository` instead, consistently,
+  for its entire lifetime — never a mix of the two.
+- **Deployment caveat**: SQLite-on-local-disk works great for local dev, a
+  VPS, or any single-process deployment with persistent disk. It does
+  **not** work as real persistence on serverless platforms with ephemeral
+  or read-only filesystems (e.g. Vercel's default deployment) — each
+  invocation could get a fresh, empty file. For that target, swap
+  `SqlitePortfolioRepository` for a hosted Postgres implementation behind
+  the same `PortfolioRepository` interface; nothing else changes.
+- Set `PORTFOLIO_STORAGE=mock` to force the old in-memory-only behavior
+  explicitly (e.g. for a demo where persistence isn't wanted).
 
 ## Authentication
 
@@ -236,11 +276,11 @@ correct anyway.
 | DCF calculator | **Fully implemented** — simple single-stage model, real computation in Python |
 | Monte Carlo valuation | **Fully implemented** — see above |
 | Scenario analysis | **Fully implemented** — see above |
-| Portfolio tracking | **Fully implemented** — add/remove holdings, USD-converted total; storage is an in-memory mock repository (not persisted across restarts) |
+| Portfolio tracking | **Fully implemented** — add/remove holdings, USD-converted total, **persisted to a local SQLite file** across restarts |
 | Mobile navigation | **Fully implemented** — drawer + hamburger below `md` |
-| Macro indicators | Mock provider only — no free/keyless macro API wired in yet |
+| Macro indicators (GDP growth, CPI inflation) | **Live** via World Bank, falls back to mock automatically. Annual data with a reporting lag — see above |
 | Auth | Clerk, conditional on env vars (see above) |
-| Database | **Not wired up.** No Postgres, no ORM yet — the `PortfolioRepository` interface exists so this is a swap-in, not a rewrite |
+| Database | **Wired up** — SQLite via `node:sqlite`, zero external dependencies. Not a fit for serverless/ephemeral-filesystem deployments (see above); swap for Postgres there |
 
 ## Deliberate simplifications
 
@@ -252,26 +292,45 @@ correct anyway.
   Fine for a static line/histogram; swap for TradingView Lightweight Charts
   (or similar) when interactivity (zoom, crosshair, multiple series) is
   needed.
-- The Yahoo Finance and Frankfurter integrations are unofficial/free-tier
-  data sources meant for a demo/personal-project scale — not a substitute
-  for a licensed real-time data vendor if you're building something that
-  needs guaranteed uptime, SLAs, or redistribution rights.
+- The Yahoo Finance, Frankfurter, and World Bank integrations are
+  unofficial/free-tier data sources meant for a demo/personal-project
+  scale — not a substitute for a licensed real-time data vendor if you're
+  building something that needs guaranteed uptime, SLAs, or redistribution
+  rights.
 - Yahoo Finance's `marketCap` field isn't fetched in `getQuote` (it lives
   in a separate quoteSummary module, and skipping it keeps quotes to one
   request) — the field is optional on `Quote` for exactly this reason.
+- SQLite-via-`node:sqlite` is a single-file, single-process store. Fine
+  for this app's scale and for local/VPS deployment; not a fit for
+  multi-instance horizontal scaling or serverless — see "Portfolio
+  storage" above.
+
+## What can't be live-verified in a network-restricted environment
+
+If you're reading this from a sandboxed/offline dev environment (no
+outbound access to `query1/query2.finance.yahoo.com`, `api.frankfurter.dev`,
+or `api.worldbank.org`): every live provider will fail its network call and
+fall back to mock data on every request. That's the fallback working
+exactly as designed, not a bug — but it does mean the **live-success path**
+for these three integrations can only be verified by response-parsing unit
+tests against fixture JSON (`npm run test`), not by an actual end-to-end
+request against the real API from inside that environment. If you can run
+this somewhere with normal internet access, `MARKET_DATA_PROVIDER=yahoo`
+(or `=frankfurter`, `=worldbank`) forces the live-only path with no
+fallback, so a failure is loud instead of silently masked — useful for
+confirming the real APIs still respond the way the parsers expect.
 
 ## Suggested next steps
 
-1. Add a Postgres-backed `PortfolioRepository` implementation (e.g. via
-   Prisma) once you're ready to persist real user data across restarts and
-   serverless cold starts (the current in-memory + `globalThis` approach
-   only survives within one running process).
+1. Add a Postgres-backed `PortfolioRepository` implementation once you're
+   ready to deploy somewhere with an ephemeral/read-only filesystem
+   (serverless) or need multi-instance scaling — the interface is already
+   correct, so this is a swap-in, not a rewrite.
 2. Swap the SVG charts for an interactive charting library once you want
    zoom/crosshair/multi-series on real historical data.
-3. Wire a free/keyless macro provider (FRED requires a key; World Bank's
-   API is keyless and could slot into `lib/macro/` the same way) if macro
-   indicators should be live too.
-4. If you outgrow Yahoo Finance's unofficial API (rate limits, reliability
+3. If you outgrow Yahoo Finance's unofficial API (rate limits, reliability
    for production traffic), swap in a licensed provider (Finnhub, Twelve
    Data, Polygon.io, ...) behind the same `MarketDataProvider` interface —
-   the fallback wrapper pattern still applies unchanged.
+   the fallback wrapper pattern still applies unchanged. Same idea for
+   World Bank → FRED if you want higher-frequency macro data and are okay
+   requiring an API key for that one source.

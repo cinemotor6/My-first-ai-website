@@ -24,7 +24,10 @@ export function SymbolSearch() {
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/market/search?q=${encodeURIComponent(trimmed)}`, {
-          signal: controller.signal,
+          // Aborts on whichever comes first: a new keystroke (debounce
+          // cleanup below) or 8s of no response, so a hung request can't
+          // leave the dropdown stuck loading indefinitely.
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8_000)]),
         });
         if (!res.ok) return;
         const data: CompanyProfile[] = await res.json();
