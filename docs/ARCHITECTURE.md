@@ -122,6 +122,38 @@ under `providers/`, register it in that folder's `index.ts`, and set the
 corresponding env var. Nothing else in the app changes — pages, API
 routes, and components depend on the interface, not the implementation.
 
+### In-memory caching for market data
+
+`CachedMarketDataProvider` (`lib/market-data/providers/cached-provider.ts`)
+is another decorator in the same chain, wrapping the live Yahoo provider
+with a short-lived, per-process, in-memory cache keyed by method +
+arguments. It exists because several pages can request the *same* symbol
+within the *same* few seconds — a watchlist symbol shows up on both
+Overview and Markets, and a stock detail page re-renders on client
+navigation — and without a cache, each of those is an independent live
+request against Yahoo Finance's free, unofficial, keyless API, needlessly
+increasing rate-limit risk for no benefit (the data hasn't meaningfully
+changed in that window anyway).
+
+- TTLs are per-method, not uniform: quotes (15s) and search results (30s)
+  are short-lived since they're time-sensitive; historical bars (5min),
+  company profiles (15min), and financial statements (60min) are cached
+  longer because that data barely changes within a session.
+- Only successful results are cached. A failure is never stored, so the
+  wrapped provider is retried on every subsequent call until it succeeds —
+  and `FallbackMarketDataProvider`, which wraps the cache (not the other
+  way around), still sees a fresh failure on every call to react to, so a
+  live outage still falls back to mock immediately rather than being
+  masked by a stale cache entry.
+- It's part of both the `live` and `yahoo` provider modes in
+  `providers/index.ts` — `mock` mode has no cache, since generating mock
+  data is already cheap and deterministic per day.
+- This is a plain in-memory `Map`, not a distributed cache — fine for this
+  app's single-process deployment target (see "Portfolio storage" below
+  for the same caveat applied to persistence); a multi-instance deployment
+  would want a shared cache (Redis, etc.) instead, but that's out of scope
+  while everything else in the app is intentionally zero-external-services.
+
 ## Portfolio storage
 
 `src/lib/portfolio/` follows the same interface pattern
@@ -306,7 +338,7 @@ correct anyway.
 
 | Feature | Status |
 |---|---|
-| Global market quotes, historical prices, symbol search | **Live** via Yahoo Finance, falls back to mock automatically |
+| Global market quotes, historical prices, symbol search | **Live** via Yahoo Finance, falls back to mock automatically, short-lived in-memory cache reduces redundant calls |
 | Market indices (S&P 500, Dow, Nasdaq, FTSE 100, Nikkei 225, DAX) | **Live**, same path as above — see Markets page |
 | Company profile & financial statements | **Live** via Yahoo Finance quoteSummary, falls back to mock |
 | News (general + per-symbol) | **Live** via Yahoo Finance search endpoint, falls back to mock |
