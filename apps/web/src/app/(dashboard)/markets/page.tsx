@@ -12,6 +12,10 @@ import {
 import { getMarketDataProvider } from "@/lib/market-data/providers";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 
+// Without this, Next prerenders the page once at build time and freezes
+// the quotes — force dynamic rendering on every request.
+export const dynamic = "force-dynamic";
+
 const ALL_SYMBOLS = ["AAPL", "MSFT", "SAP.DE", "7203.T", "0700.HK", "NESN.SW"];
 
 export default async function MarketsPage() {

@@ -9,6 +9,10 @@ import {
 } from "@/components/ui/table";
 import { getMacroProvider } from "@/lib/macro/providers";
 
+// Without this, Next prerenders the page once at build time and freezes
+// the indicator values — force dynamic rendering on every request.
+export const dynamic = "force-dynamic";
+
 export default async function MacroPage() {
   const provider = getMacroProvider();
   const indicators = await provider.getIndicators();

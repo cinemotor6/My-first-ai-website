@@ -1,7 +1,16 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
-from app.schemas import DCFInput, DCFResult, MonteCarloInput, ScenarioInput
+from app.schemas import (
+    DCFInput,
+    DCFResult,
+    MonteCarloInput,
+    MonteCarloResult,
+    ScenarioAnalysisResult,
+    ScenarioInput,
+)
 from app.services.dcf import calculate_dcf
+from app.services.monte_carlo import run_monte_carlo
+from app.services.scenarios import run_scenarios
 
 router = APIRouter(prefix="/api/v1/valuation", tags=["valuation"])
 
@@ -13,26 +22,11 @@ def run_dcf(payload: DCFInput) -> DCFResult:
     return calculate_dcf(payload)
 
 
-@router.post("/monte-carlo", status_code=501)
-def run_monte_carlo(payload: MonteCarloInput) -> dict:
-    """
-    Contract-only stub: request validation works end-to-end, but the
-    simulation itself is intentionally not implemented yet. This is the
-    foundation phase — see docs/ARCHITECTURE.md for the planned approach
-    (resample revenue_growth_rate and discount_rate from normal
-    distributions per iteration, run calculate_dcf, collect the
-    distribution of fair_value_per_share).
-    """
-    raise HTTPException(
-        status_code=501,
-        detail=f"Monte Carlo valuation for {payload.symbol} is not implemented yet.",
-    )
+@router.post("/monte-carlo", response_model=MonteCarloResult)
+def monte_carlo(payload: MonteCarloInput) -> MonteCarloResult:
+    return run_monte_carlo(payload)
 
 
-@router.post("/scenarios", status_code=501)
-def run_scenarios(payload: ScenarioInput) -> dict:
-    """Contract-only stub. See run_monte_carlo docstring — same phase, same reasoning."""
-    raise HTTPException(
-        status_code=501,
-        detail=f"Scenario analysis for {payload.symbol} is not implemented yet.",
-    )
+@router.post("/scenarios", response_model=ScenarioAnalysisResult)
+def scenarios(payload: ScenarioInput) -> ScenarioAnalysisResult:
+    return run_scenarios(payload)

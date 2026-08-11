@@ -1,6 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getNewsProvider } from "@/lib/news/providers";
 
+// Without this, Next prerenders the page once at build time and freezes
+// the article list — force dynamic rendering on every request.
+export const dynamic = "force-dynamic";
+
 export default async function NewsPage() {
   const provider = getNewsProvider();
   const articles = await provider.getLatest(20);

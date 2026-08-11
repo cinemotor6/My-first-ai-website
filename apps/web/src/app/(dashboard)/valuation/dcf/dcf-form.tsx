@@ -2,47 +2,19 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DCFFieldsGrid } from "@/components/valuation/dcf-fields-grid";
+import { DCF_DEFAULTS, type DCFFormState } from "@/lib/valuation/dcf-fields";
 import { formatCurrency } from "@/lib/utils";
 import type { DCFResult } from "@financeapp/shared-types";
 
-const DEFAULTS = {
-  symbol: "AAPL",
-  currentRevenue: 400_000_000_000,
-  revenueGrowthRate: 0.08,
-  ebitMargin: 0.3,
-  taxRate: 0.21,
-  discountRate: 0.09,
-  terminalGrowthRate: 0.025,
-  projectionYears: 5,
-  sharesOutstanding: 15_000_000_000,
-  netDebt: 50_000_000_000,
-};
-
-type FormState = typeof DEFAULTS;
-
-const FIELDS: { key: keyof FormState; label: string; step?: string }[] = [
-  { key: "symbol", label: "Symbol" },
-  { key: "currentRevenue", label: "Current revenue" },
-  { key: "revenueGrowthRate", label: "Revenue growth rate (decimal)", step: "0.01" },
-  { key: "ebitMargin", label: "EBIT margin (decimal)", step: "0.01" },
-  { key: "taxRate", label: "Tax rate (decimal)", step: "0.01" },
-  { key: "discountRate", label: "Discount rate / WACC (decimal)", step: "0.01" },
-  { key: "terminalGrowthRate", label: "Terminal growth rate (decimal)", step: "0.001" },
-  { key: "projectionYears", label: "Projection years" },
-  { key: "sharesOutstanding", label: "Shares outstanding" },
-  { key: "netDebt", label: "Net debt" },
-];
-
 export function DCFForm() {
-  const [form, setForm] = useState<FormState>(DEFAULTS);
+  const [form, setForm] = useState<DCFFormState>(DCF_DEFAULTS);
   const [result, setResult] = useState<DCFResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function updateField(key: keyof FormState, value: string) {
+  function updateField(key: keyof DCFFormState, value: string) {
     setForm((prev) => ({
       ...prev,
       [key]: key === "symbol" ? value : Number(value),
@@ -83,19 +55,7 @@ export function DCFForm() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-3">
-            {FIELDS.map((field) => (
-              <div key={field.key} className="grid grid-cols-2 items-center gap-2">
-                <Label htmlFor={field.key}>{field.label}</Label>
-                <Input
-                  id={field.key}
-                  type={field.key === "symbol" ? "text" : "number"}
-                  step={field.step}
-                  value={form[field.key]}
-                  onChange={(e) => updateField(field.key, e.target.value)}
-                  required
-                />
-              </div>
-            ))}
+            <DCFFieldsGrid idPrefix="dcf" value={form} onChange={updateField} />
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? "Calculating..." : "Calculate fair value"}
             </Button>

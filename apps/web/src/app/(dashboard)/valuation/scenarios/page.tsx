@@ -1,5 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ScenarioForm } from "./scenario-form";
 
 export default function ScenariosPage() {
   return (
@@ -11,19 +10,7 @@ export default function ScenariosPage() {
           assumption overrides) side by side.
         </p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Coming in a later phase <Badge variant="outline">not implemented</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          The API contract already exists (
-          <code className="rounded bg-muted px-1 py-0.5">POST /api/v1/valuation/scenarios</code>{" "}
-          in apps/quant-api) and returns <code className="rounded bg-muted px-1 py-0.5">501</code>{" "}
-          until it&apos;s implemented.
-        </CardContent>
-      </Card>
+      <ScenarioForm />
     </div>
   );
 }

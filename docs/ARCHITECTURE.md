@@ -109,42 +109,125 @@ server SDK) are deliberately separate files. Next.js's client/server
 bundling boundary would otherwise pull server-only Clerk code into the
 browser bundle if they were combined.
 
-## What's implemented vs. stubbed
+## Monte Carlo & scenario analysis
+
+Both are fully implemented, not stubs:
+
+- **Monte Carlo** (`apps/quant-api/app/services/monte_carlo.py`): resamples
+  `revenue_growth_rate` and `discount_rate` from normal distributions
+  centered on the base case, for as many iterations as requested (up to
+  100k), and reruns the DCF formula for every draw — vectorized with numpy
+  rather than looping (constructing/validating 100k Pydantic models would
+  dominate the runtime, so this reimplements the same formula from
+  `services/dcf.py` directly on arrays; keep the two in sync if the DCF
+  formula changes). `discount_rate` draws are clamped above
+  `terminal_growth_rate` so an unlucky sample can't blow up the terminal
+  value formula. Returns mean/median/std dev, percentiles, and a 20-bucket
+  histogram. UI: `valuation/monte-carlo/monte-carlo-form.tsx`, rendered with
+  a dependency-free bar-chart histogram (`components/charts/histogram.tsx`).
+- **Scenario analysis** (`apps/quant-api/app/services/scenarios.py`):
+  applies named overrides on top of the base case and reruns the DCF model
+  for each. A scenario with invalid overrides (e.g. a discount rate at or
+  below the terminal growth rate) reports an `error` field instead of
+  failing the whole request — one bad scenario doesn't hide the others. UI:
+  `valuation/scenarios/scenario-form.tsx`, with an editable base case and a
+  dynamic list of scenario rows.
+
+## Symbol search
+
+`components/layout/symbol-search.tsx` debounces input (200ms) and calls
+`GET /api/market/search?q=`, which goes through `MarketDataProvider.searchSymbols()`
+— the same adapter used everywhere else, so a real provider gets search for
+free. Results render as a keyboard-navigable dropdown (arrow keys, Enter,
+Escape); Enter with nothing selected falls back to navigating straight to
+the typed symbol.
+
+## Portfolio mutations
+
+`portfolio/add-holding-form.tsx` and `remove-holding-button.tsx` call
+`POST /api/portfolio` and `DELETE /api/portfolio/[id]`, then
+`router.refresh()` to re-fetch the Server Component. Two things had to be
+true for this to actually work — both were real bugs caught during
+end-to-end browser testing, not just theoretical:
+
+1. **The portfolio page must be dynamically rendered.** Next.js will
+   statically prerender a page at build time if nothing in it uses a
+   dynamic API — which was happening here, freezing the page to whatever
+   the mock data looked like at build time. `export const dynamic =
+   "force-dynamic"` on `portfolio/page.tsx` (and on every other page that
+   reads from a provider: overview, markets, news, macro) fixes this.
+2. **The repository singleton must live on `globalThis`, not a
+   module-level variable.** Next.js dev server (Fast Refresh / Turbopack)
+   can re-evaluate a module, and Route Handlers vs. Server Components can
+   even sit in separate module graphs — either would silently fork a
+   module-level `let cached = ...` into multiple independent in-memory
+   stores, so a POST via the Route Handler would land in a different
+   instance than the one the page reads from. See
+   `lib/portfolio/providers/index.ts` — same pattern the Prisma docs
+   recommend for Next.js client singletons, for the same reason.
+
+## Currency conversion
+
+Portfolio holdings can be in different currencies (the seed data mixes USD
+and EUR). Summing raw numbers across currencies would be meaningless, so
+`lib/fx/` follows the same adapter pattern as the other data sources
+(`FxRateProvider` interface, `MockFxRateProvider` with static illustrative
+USD cross-rates) and the portfolio page converts every holding to USD
+before totaling. Per-row values still show in their native currency.
+
+## Mobile navigation
+
+The sidebar is `hidden md:flex` — below the `md` breakpoint there's no
+sidebar at all, so `components/layout/mobile-nav.tsx` provides a hamburger
+button + slide-over drawer using the same nav list
+(`components/layout/nav-links.tsx`, shared between both so they can't drift
+apart). The drawer closes via `onClick` on each `Link` — not via a
+`useEffect` watching `pathname` — because closing state from an effect in
+response to a route change is exactly the kind of synchronous
+effect-driven `setState` React's newer lint rules (and the render-time
+alternative using a ref) both flag; tying the close to the actual user
+action (clicking a link) sidesteps the problem entirely and is arguably more
+correct anyway.
+
+## What's implemented vs. mock/simplified
 
 | Feature | Status |
 |---|---|
 | Global market quotes, search, historical prices | Mock provider, adapter-ready for a real one |
 | Company financials (income statement, balance sheet, cash flow) | Mock provider |
-| Charts | Basic dependency-free SVG line chart (`components/charts/line-chart.tsx`) |
+| Charts | Dependency-free SVG line chart + histogram (`components/charts/`) |
 | DCF calculator | **Fully implemented** — simple single-stage model, real computation in Python |
-| Monte Carlo valuation | **Stub only.** `POST /api/v1/valuation/monte-carlo` validates its request schema and returns `501 Not Implemented`. The plan (see docstring in `app/routers/valuation.py`) is to resample `revenue_growth_rate` and `discount_rate` from normal distributions per iteration, rerun `calculate_dcf`, and return the resulting distribution. |
-| Scenario analysis | **Stub only.** Same pattern — `POST /api/v1/valuation/scenarios` returns `501`. |
-| Portfolio tracking | Mock in-memory repository, UI wired up, no persistence |
+| Monte Carlo valuation | **Fully implemented** — see above |
+| Scenario analysis | **Fully implemented** — see above |
+| Portfolio tracking | **Fully implemented** — add/remove holdings, USD-converted total; storage is an in-memory mock repository (not persisted across restarts) |
+| Symbol search | **Fully implemented** — debounced autocomplete against the market-data adapter |
+| Mobile navigation | **Fully implemented** — drawer + hamburger below `md` |
 | News | Mock provider, 4 sample articles |
 | Macro indicators | Mock provider, sample US/EU/Japan/China indicators |
 | Auth | Clerk, conditional on env vars (see above) |
 | Database | **Not wired up.** No Postgres, no ORM yet — the `PortfolioRepository` interface exists so this is a swap-in, not a rewrite |
 
-## Deliberate simplifications (foundation phase)
+## Deliberate simplifications
 
-- The DCF model is single-stage (constant growth/margin across the
-  projection window, no working-capital or capex line items). It's a
-  reasonable first cut, clearly documented as such in
-  `apps/quant-api/app/services/dcf.py`, not meant to be investment-grade.
-- The price chart is hand-rolled SVG, not an interactive charting library.
-  Fine for a static 90-day line; swap for TradingView Lightweight Charts (or
-  similar) when interactivity (zoom, crosshair, multiple series) is needed.
-- Portfolio totals don't currency-convert — a USD + EUR portfolio sums raw
-  numbers today. Needs an FX rate source before that's meaningful.
+- The DCF model (and the Monte Carlo/scenario models built on it) is
+  single-stage — constant growth/margin across the projection window, no
+  working-capital or capex line items. A reasonable first cut, documented
+  as such in `apps/quant-api/app/services/dcf.py`, not investment-grade.
+- The charts are hand-rolled SVG, not an interactive charting library.
+  Fine for a static line/histogram; swap for TradingView Lightweight Charts
+  (or similar) when interactivity (zoom, crosshair, multiple series) is
+  needed.
+- FX rates are static illustrative constants, not live rates.
 
 ## Suggested next steps
 
 1. Wire a real market-data provider (Finnhub free tier is a reasonable
-   starting point) behind the existing adapter.
+   starting point) behind the existing adapter — search, quotes, and
+   historicals all get it automatically.
 2. Add a Postgres-backed `PortfolioRepository` implementation (e.g. via
-   Prisma) once you're ready to persist real user data.
-3. Implement Monte Carlo simulation in `apps/quant-api` — the request/response
-   schemas and endpoint already exist, only the simulation body is missing.
-4. Same for scenario analysis.
-5. Swap the SVG chart for an interactive charting library once real
+   Prisma) once you're ready to persist real user data across restarts and
+   serverless cold starts (the current in-memory + `globalThis` approach
+   only survives within one running process).
+3. Swap the SVG charts for an interactive charting library once real
    historical data is flowing.
+4. Wire a real FX rate provider behind `lib/fx/`.

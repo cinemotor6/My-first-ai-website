@@ -133,3 +133,36 @@ export interface ScenarioInput {
     overrides: Partial<DCFInput>;
   }[];
 }
+
+export interface HistogramBucket {
+  rangeStart: number;
+  rangeEnd: number;
+  count: number;
+}
+
+export interface MonteCarloResult {
+  symbol: string;
+  iterations: number;
+  meanFairValue: number;
+  medianFairValue: number;
+  stdDev: number;
+  percentile5: number;
+  percentile25: number;
+  percentile75: number;
+  percentile95: number;
+  minValue: number;
+  maxValue: number;
+  histogram: HistogramBucket[];
+}
+
+export interface ScenarioResult {
+  name: string;
+  result: DCFResult | null;
+  error: string | null;
+}
+
+export interface ScenarioAnalysisResult {
+  symbol: string;
+  baseCase: DCFResult;
+  scenarios: ScenarioResult[];
+}

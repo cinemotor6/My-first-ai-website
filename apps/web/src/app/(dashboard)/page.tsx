@@ -6,6 +6,10 @@ import { getMacroProvider } from "@/lib/macro/providers";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import Link from "next/link";
 
+// Without this, Next prerenders the page once at build time and freezes
+// the quotes/news/macro data — force dynamic rendering on every request.
+export const dynamic = "force-dynamic";
+
 const WATCHLIST = ["AAPL", "MSFT", "SAP.DE", "7203.T", "0700.HK", "NESN.SW"];
 
 export default async function OverviewPage() {

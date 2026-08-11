@@ -4,10 +4,15 @@ A global financial dashboard: market data, company financials, charts,
 valuation tools (DCF, Monte Carlo, scenario analysis), portfolio tracking,
 news, and macroeconomic indicators.
 
-This is the **foundation phase**: the architecture, folder structure, and
-data flow are in place end-to-end, running on mock data and a basic
-single-stage DCF model. Advanced valuation logic (Monte Carlo, scenario
-analysis) is intentionally stubbed — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Every feature above is functional end-to-end on mock/sample data — no
+paid APIs or signups required. Market data, news, macro indicators, and
+FX rates are served by pluggable mock adapters (swap in a real provider by
+implementing one interface, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)).
+Portfolio holdings can be added and removed through the UI, backed by an
+in-memory store (not persisted across restarts — a real database is the
+next step, not yet wired up). DCF, Monte Carlo, and scenario analysis all
+run real calculations in the Python quant service; the DCF model itself is
+intentionally a simple single-stage model, not investment-grade.
 
 ## Quick start
 
@@ -41,11 +46,11 @@ apps/
 packages/
   shared-types/ TypeScript types shared by apps/web and mirrored in quant-api's schemas
 docs/
-  ARCHITECTURE.md   How the pieces fit together, and what's stubbed vs. real
+  ARCHITECTURE.md   How the pieces fit together, and what's mock vs. real
   RUNNING.md        Full setup and environment variable reference
 ```
 
 ## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data flow, what's implemented vs. stubbed
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design, data flow, what's implemented vs. mock/simplified
 - [docs/RUNNING.md](docs/RUNNING.md) — running locally, environment variables, tests

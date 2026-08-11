@@ -19,3 +19,31 @@ export const dcfInputSchema = z.object({
 });
 
 export type DCFInputPayload = z.infer<typeof dcfInputSchema>;
+
+/** Mirrors apps/quant-api/app/schemas.py::MonteCarloInput. */
+export const monteCarloInputSchema = z.object({
+  symbol: z.string().trim().min(1).max(20),
+  baseCase: dcfInputSchema,
+  iterations: z.number().int().min(100).max(100_000),
+  revenueGrowthStdDev: z.number().min(0).max(1),
+  discountRateStdDev: z.number().min(0).max(1),
+});
+
+export type MonteCarloInputPayload = z.infer<typeof monteCarloInputSchema>;
+
+/** Mirrors apps/quant-api/app/schemas.py::ScenarioInput. */
+export const scenarioInputSchema = z.object({
+  symbol: z.string().trim().min(1).max(20),
+  baseCase: dcfInputSchema,
+  scenarios: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(50),
+        overrides: dcfInputSchema.partial(),
+      }),
+    )
+    .min(1)
+    .max(10),
+});
+
+export type ScenarioInputPayload = z.infer<typeof scenarioInputSchema>;

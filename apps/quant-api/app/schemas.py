@@ -55,6 +55,27 @@ class MonteCarloInput(CamelModel):
     discount_rate_std_dev: float = Field(ge=0, le=1)
 
 
+class HistogramBucket(CamelModel):
+    range_start: float
+    range_end: float
+    count: int
+
+
+class MonteCarloResult(CamelModel):
+    symbol: str
+    iterations: int
+    mean_fair_value: float
+    median_fair_value: float
+    std_dev: float
+    percentile_5: float
+    percentile_25: float
+    percentile_75: float
+    percentile_95: float
+    min_value: float
+    max_value: float
+    histogram: list[HistogramBucket]
+
+
 class ScenarioOverride(CamelModel):
     name: str
     overrides: dict = Field(default_factory=dict)
@@ -64,3 +85,15 @@ class ScenarioInput(CamelModel):
     symbol: str = Field(min_length=1, max_length=20)
     base_case: DCFInput
     scenarios: list[ScenarioOverride]
+
+
+class ScenarioResult(CamelModel):
+    name: str
+    result: DCFResult | None = None
+    error: str | None = None
+
+
+class ScenarioAnalysisResult(CamelModel):
+    symbol: str
+    base_case: DCFResult
+    scenarios: list[ScenarioResult]
